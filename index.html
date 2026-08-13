@@ -650,6 +650,29 @@
       const finalPerson = PEOPLE.find(p => p.day === 10);
       const finalXY = projection([finalPerson.lon, finalPerson.lat]);
 
+      // people who share (near-)identical coordinates would otherwise
+      // render as one stacked, unclickable pin — spread them in a small
+      // ring around the true point instead
+      const pinXY = new Map();
+      const coordGroups = new Map();
+      PEOPLE.forEach(p => {
+        const key = p.lat.toFixed(2) + ',' + p.lon.toFixed(2);
+        if (!coordGroups.has(key)) coordGroups.set(key, []);
+        coordGroups.get(key).push(p);
+      });
+      coordGroups.forEach(group => {
+        const [cx, cy] = projection([group[0].lon, group[0].lat]);
+        if (group.length === 1) {
+          pinXY.set(group[0], [cx, cy]);
+          return;
+        }
+        const ringRadius = 14;
+        group.forEach((p, i) => {
+          const angle = (2 * Math.PI * i) / group.length - Math.PI / 2;
+          pinXY.set(p, [cx + ringRadius * Math.cos(angle), cy + ringRadius * Math.sin(angle)]);
+        });
+      });
+
       d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(world => {
         const land = topojson.feature(world, world.objects.countries);
 
@@ -671,7 +694,7 @@
       function drawThreads() {
         const threadsGroup = svg.append('g').attr('class', 'threads');
         PEOPLE.filter(p => p.day < 10 && p.day <= unlockedDay).forEach(p => {
-          const [x1, y1] = projection([p.lon, p.lat]);
+          const [x1, y1] = pinXY.get(p);
           const mx = (x1 + finalXY[0]) / 2;
           const my = Math.min(y1, finalXY[1]) - 40;
           const d = `M${x1},${y1} Q${mx},${my} ${finalXY[0]},${finalXY[1]}`;
@@ -705,11 +728,11 @@
             return cls;
           })
           .attr('transform', p => {
-            const [x, y] = projection([p.lon, p.lat]);
+            const [x, y] = pinXY.get(p);
             return `translate(${x},${y})`;
           });
 
-        nodes.append('circle').attr('class', 'pin-hit').attr('r', 14);
+        nodes.append('circle').attr('class', 'pin-hit').attr('r', 9);
         nodes.append('circle').attr('class', 'pin-halo').attr('r', 5);
         nodes.append('circle').attr('class', 'pin-dot').attr('r', 3.2);
 

@@ -45,10 +45,10 @@ const PEOPLE = [
     day: 2,
     name: "Marina Henry",
     relation: "friend",
-    city: "Alexandria",
+    city: "Cairo",
     country: "Egypt",
-    lat: 31.2001,
-    lon: 29.9187,
+    lat: 30.0444,
+    lon: 31.2357,
     type: "letter",
     content:
       "PLACEHOLDER — replace with Marina Henry's message.\n\nCan be text, or swap type to \"photo\" or \"video\" if she'd rather send one of those instead."
