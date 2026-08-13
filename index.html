@@ -136,7 +136,7 @@
   .pin-group.locked .pin-dot{ fill:var(--locked); r:3.2; }
   .pin-group.unlocked .pin-dot{ fill:var(--gold); r:4.4; }
   .pin-group.today .pin-dot{ fill:var(--gold-bright); r:5.2; }
-  .pin-group.final .pin-dot{ fill:var(--rust); r:6; }
+  .pin-group.final.unlocked .pin-dot, .pin-group.final.today .pin-dot{ fill:var(--rust); r:6; }
   .pin-group:hover .pin-dot{ r:7; }
 
   .pin-label{
@@ -400,8 +400,8 @@ function initApp(){
       .join('g')
       .attr('class', p => {
         let cls = 'pin-group ';
-        if(p.day === 10) cls += 'final unlocked';
-        else if(p.day === unlockedDay) cls += 'today unlocked';
+        if(p.day === 10) cls += 'final ';
+        if(p.day === unlockedDay) cls += 'today unlocked';
         else if(p.day < unlockedDay) cls += 'unlocked';
         else cls += 'locked';
         return cls;
