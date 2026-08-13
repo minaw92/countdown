@@ -28,8 +28,8 @@ or videos, paste them in.
   placeholders (Houston, Austin, generic Texas center).
 
 **3. Double check the dates**
-`COUNTDOWN.startDate` is set to 2026-09-17 and `endDate` to 2026-09-26 so
-day 10 lands on her birthday. Day 1 unlocks on the start date automatically,
+`COUNTDOWN.startDate` and `endDate` in `content.js` should be set so day 10
+lands on her birthday. Day 1 unlocks on the start date automatically,
 nothing else to configure.
 
 **4. Change the passcode if you want**
@@ -39,7 +39,7 @@ It's currently `mina`, edit `COUNTDOWN.passcode` in `content.js`.
 
 1. Create a new repository on GitHub (keep it public, or private if you're
    on a paid plan, Pages works with either).
-2. Upload these three files to it: `index.html`, `content.js`, and this
+2. Upload these files to it: `index.html`, `app.html`, `content.js`, and this
    `README.md` (plus a `photos/` folder if you added any images).
 3. In the repo, go to **Settings → Pages**.
 4. Under **Build and deployment**, set **Source** to "Deploy from a branch",
@@ -48,8 +48,10 @@ It's currently `mina`, edit `COUNTDOWN.passcode` in `content.js`.
    `https://yourusername.github.io/repo-name/`. That's the link you send her
    on day 1.
 
-Every time you edit `content.js` and re-upload it, the live site updates
-within a minute or two.
+`index.html` is a small loader, it just fetches `app.html` fresh on every
+visit so nobody gets stuck looking at a cached, outdated page. `app.html` is
+the actual site. Every time you edit `content.js` or `app.html` and
+re-upload, the live site updates immediately, no waiting on cache.
 
 ## Sending her the daily nudge
 The site unlocks pins automatically based on the date, so nothing needs to
