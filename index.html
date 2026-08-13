@@ -13,9 +13,12 @@
     // app.html can still show a stale version. This loader always fetches
     // app.html with a cache-busting query string, then writes it into the
     // document so its own scripts execute normally.
-    fetch('app.html?v=' + Date.now(), { cache: 'no-store' })
+    var v = Date.now();
+    fetch('app.html?v=' + v, { cache: 'no-store' })
       .then(function (res) { return res.text(); })
       .then(function (html) {
+        // also cache-bust content.js so edits to it show up immediately
+        html = html.replace('src="content.js"', 'src="content.js?v=' + v + '"');
         document.open();
         document.write(html);
         document.close();

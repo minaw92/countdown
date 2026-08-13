@@ -241,6 +241,7 @@
 
     .pin-group.locked .pin-hit {
       cursor: default;
+      pointer-events: none;
     }
 
     .pin-group.unlocked .pin-hit {
@@ -563,6 +564,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+  <script src="content.js"></script>
 
   <script>
     /* ============================================================
@@ -683,8 +685,12 @@
       function drawPins() {
         const pinsGroup = svg.append('g').attr('class', 'pins');
 
+        // draw unlocked pins last (on top) so an overlapping locked pin can
+        // never sit above and block clicks on a clickable one
+        const drawOrder = [...PEOPLE].sort((a, b) => (a.day <= unlockedDay) - (b.day <= unlockedDay));
+
         const nodes = pinsGroup.selectAll('g.pin-group')
-          .data(PEOPLE)
+          .data(drawOrder)
           .join('g')
           .attr('class', p => {
             let cls = 'pin-group ';
