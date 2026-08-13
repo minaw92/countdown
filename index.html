@@ -3,6 +3,9 @@
 
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ten Days to Thirty</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -563,7 +566,11 @@
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
-  <script src="content.js"></script>
+  <script>
+    // Cache-busting: forces the browser to fetch the latest content.js
+    // every page load instead of reusing a stale cached copy.
+    document.write('<script src="content.js?v=' + Date.now() + '"><\/script>');
+  </script>
   <script>
     /* ============================================================
        Passcode gate
