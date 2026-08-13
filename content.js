@@ -22,8 +22,8 @@
    ============================================================ */
 
 const COUNTDOWN = {
-  startDate: "2026-08-13",
-  endDate: "2026-08-22",
+  startDate: "2026-08-13T00:00:00", // Force midnight local time
+  endDate: "2026-08-22T23:59:59",
   herName: "Ellen",
   passcode: "mina"
 };
