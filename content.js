@@ -39,7 +39,7 @@ const PEOPLE = [
     lon: 31.2357,
     type: "photo",
     content:
-      { src: "random.jpg", caption: "test" }
+      "PLACEHOLDER — replace with Marina Henry's message.\n\nCan be text, or swap type to \"photo\" or \"video\" if she'd rather send one of those instead."
   },
   {
     day: 2,
