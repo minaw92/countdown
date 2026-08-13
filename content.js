@@ -24,7 +24,7 @@
 const COUNTDOWN = {
   // First pin unlocks this date, last pin (day 10) is her birthday
   startDate: "2026-08-13",
-  endDate: "2026-09-26",
+  endDate: "2026-08-26",
   herName: "Ellen",
   passcode: "mina" // not case sensitive, edit anytime
 };
