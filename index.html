@@ -310,19 +310,26 @@
       font-family: 'Jost', sans-serif;
       font-size: 9px;
       letter-spacing: .02em;
-      fill: var(--cream-dim);
+      fill: var(--cream);
       pointer-events: none;
+      paint-order: stroke;
+      stroke: rgba(18, 22, 42, 0.85);
+      stroke-width: 2.5px;
+      stroke-linejoin: round;
     }
 
-    .pin-group.locked .pin-label {
+    .pin-label.locked {
       fill: var(--locked);
       opacity: .7;
     }
 
-    .pin-group.unlocked .pin-label,
-    .pin-group.today .pin-label,
-    .pin-group.final .pin-label {
-      fill: var(--cream);
+    .label-leader {
+      stroke: rgba(217, 168, 87, 0.45);
+      stroke-width: .6;
+    }
+
+    .label-leader.locked {
+      stroke: var(--locked-line);
     }
 
     footer.bottom {
@@ -648,29 +655,36 @@
       document.getElementById('lit-count').textContent = unlockedDay;
 
       const finalPerson = PEOPLE.find(p => p.day === 10);
-      const finalXY = projection([finalPerson.lon, finalPerson.lat]);
 
-      // people who share (near-)identical coordinates would otherwise
-      // render as one stacked, unclickable pin — spread them in a small
-      // ring around the true point instead
+      // Group people by city. A city with several people gets its pins laid
+      // out in a short vertical stack and ONE shared label block beside them,
+      // so names never overlap each other the way per-pin labels did.
       const pinXY = new Map();
+      const clusters = [];
       const coordGroups = new Map();
       PEOPLE.forEach(p => {
         const key = p.lat.toFixed(2) + ',' + p.lon.toFixed(2);
         if (!coordGroups.has(key)) coordGroups.set(key, []);
         coordGroups.get(key).push(p);
       });
+
+      const rowHeight = 13;
+
       coordGroups.forEach(group => {
         const [cx, cy] = projection([group[0].lon, group[0].lat]);
-        if (group.length === 1) {
-          pinXY.set(group[0], [cx, cy]);
-          return;
+        // label sits on whichever side has more room, so it never runs off-map
+        const side = cx > width * 0.62 ? -1 : 1;
+        const members = [...group].sort((a, b) => a.day - b.day);
+
+        if (members.length === 1) {
+          pinXY.set(members[0], [cx, cy]);
+        } else {
+          // stack the dots vertically, centred on the true city point
+          const top = cy - ((members.length - 1) * rowHeight) / 2;
+          members.forEach((p, i) => pinXY.set(p, [cx, top + i * rowHeight]));
         }
-        const ringRadius = 14;
-        group.forEach((p, i) => {
-          const angle = (2 * Math.PI * i) / group.length - Math.PI / 2;
-          pinXY.set(p, [cx + ringRadius * Math.cos(angle), cy + ringRadius * Math.sin(angle)]);
-        });
+
+        clusters.push({ members, cx, cy, side });
       });
 
       d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(world => {
@@ -693,11 +707,18 @@
 
       function drawThreads() {
         const threadsGroup = svg.append('g').attr('class', 'threads');
+        const [fx, fy] = pinXY.get(finalPerson);
         PEOPLE.filter(p => p.day < 10 && p.day <= unlockedDay).forEach(p => {
           const [x1, y1] = pinXY.get(p);
-          const mx = (x1 + finalXY[0]) / 2;
-          const my = Math.min(y1, finalXY[1]) - 40;
-          const d = `M${x1},${y1} Q${mx},${my} ${finalXY[0]},${finalXY[1]}`;
+          // stop short of the final pin so threads don't bury it or the
+          // other pins sharing its city
+          const dx = fx - x1, dy = fy - y1;
+          const len = Math.hypot(dx, dy) || 1;
+          const x2 = fx - (dx / len) * 7;
+          const y2 = fy - (dy / len) * 7;
+          const mx = (x1 + x2) / 2;
+          const my = Math.min(y1, y2) - 40;
+          const d = `M${x1},${y1} Q${mx},${my} ${x2},${y2}`;
           threadsGroup.append('path')
             .attr('class', 'thread')
             .attr('d', d)
@@ -736,17 +757,66 @@
         nodes.append('circle').attr('class', 'pin-halo').attr('r', 5);
         nodes.append('circle').attr('class', 'pin-dot').attr('r', 3.2);
 
-        nodes.append('text')
-          .attr('class', 'pin-label')
-          .attr('x', 9).attr('y', 3)
-          .text(p => p.day <= unlockedDay ? `${p.day}. ${p.name}` : `Day ${p.day}`);
-
         nodes.filter(p => p.day <= unlockedDay)
           .on('click', (event, p) => openModal(p));
 
         nodes.filter(p => p.day <= unlockedDay)
           .append('title')
           .text(p => `${p.name} — ${p.city}, ${p.country}`);
+
+        drawLabels();
+      }
+
+      // One label block per city: names listed beside the cluster, each name
+      // on its own row aligned with its dot, joined by a short leader line.
+      function drawLabels() {
+        const labelsGroup = svg.append('g').attr('class', 'labels');
+
+        // Collect every label row first, then push apart any rows that would
+        // collide — this catches separate cities that sit close together
+        // (Amsterdam/Prague) as well as people sharing one city.
+        const rows = [];
+        clusters.forEach(cluster => {
+          const { members, cx, side } = cluster;
+          const labelX = cx + side * 11;
+          members.forEach(p => {
+            const [, py] = pinXY.get(p);
+            rows.push({ p, cx, side, labelX, py, textY: py });
+          });
+        });
+
+        // only rows whose labels start near each other can actually collide
+        rows.sort((a, b) => a.textY - b.textY);
+        for (let i = 1; i < rows.length; i++) {
+          const cur = rows[i];
+          for (let j = 0; j < i; j++) {
+            const prev = rows[j];
+            const sameBand = Math.abs(cur.labelX - prev.labelX) < 90 && cur.side === prev.side;
+            if (sameBand && cur.textY - prev.textY < rowHeight) {
+              cur.textY = prev.textY + rowHeight;
+            }
+          }
+        }
+
+        rows.forEach(row => {
+          const { p, cx, side, labelX, py, textY } = row;
+          const anchor = side === 1 ? 'start' : 'end';
+          const unlocked = p.day <= unlockedDay;
+
+          // leader line from the dot out to its name, angling to the row's
+          // final position if it had to be nudged to avoid a collision
+          labelsGroup.append('line')
+            .attr('class', 'label-leader' + (unlocked ? '' : ' locked'))
+            .attr('x1', cx + side * 5.5).attr('y1', py)
+            .attr('x2', labelX - side * 2).attr('y2', textY);
+
+          labelsGroup.append('text')
+            .attr('class', 'pin-label' + (unlocked ? '' : ' locked'))
+            .attr('x', labelX)
+            .attr('y', textY + 3)
+            .attr('text-anchor', anchor)
+            .text(unlocked ? `${p.day}. ${p.name}` : `Day ${p.day}`);
+        });
       }
     }
 
