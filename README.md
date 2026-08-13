@@ -39,7 +39,7 @@ It's currently `mina`, edit `COUNTDOWN.passcode` in `content.js`.
 
 1. Create a new repository on GitHub (keep it public, or private if you're
    on a paid plan, Pages works with either).
-2. Upload these files to it: `index.html`, `app.html`, `content.js`, and this
+2. Upload these files to it: `index.html`, `content.js`, `sw.js`, and this
    `README.md` (plus a `photos/` folder if you added any images).
 3. In the repo, go to **Settings → Pages**.
 4. Under **Build and deployment**, set **Source** to "Deploy from a branch",
@@ -48,10 +48,14 @@ It's currently `mina`, edit `COUNTDOWN.passcode` in `content.js`.
    `https://yourusername.github.io/repo-name/`. That's the link you send her
    on day 1.
 
-`index.html` is a small loader, it just fetches `app.html` fresh on every
-visit so nobody gets stuck looking at a cached, outdated page. `app.html` is
-the actual site. Every time you edit `content.js` or `app.html` and
-re-upload, the live site updates immediately, no waiting on cache.
+GitHub Pages tells browsers they're allowed to cache `index.html` for up to
+10 minutes, so a fresh edit can take a little while to show up on its own.
+`sw.js` is a small service worker that fixes this: after someone's first
+visit, it takes over and forces every later visit to fetch fresh from the
+network, so edits show up immediately after that. `content.js` also gets a
+cache-busting query string on every load for the same reason. First visit
+ever can still lag up to 10 minutes behind a brand new deploy; every visit
+after that is instant.
 
 ## Sending her the daily nudge
 The site unlocks pins automatically based on the date, so nothing needs to
