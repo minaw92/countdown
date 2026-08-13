@@ -23,7 +23,7 @@
 
 const COUNTDOWN = {
   // First pin unlocks this date, last pin (day 10) is her birthday
-  startDate: "2026-09-17",
+  startDate: "2026-08-13",
   endDate: "2026-09-26",
   herName: "Ellen",
   passcode: "mina" // not case sensitive, edit anytime
@@ -38,9 +38,9 @@ const PEOPLE = [
     country: "Egypt",
     lat: 30.0444,
     lon: 31.2357,
-    type: "letter",
+    type: "photo",
     content:
-      "PLACEHOLDER — replace with her sister's letter.\n\nWrite a little about a memory, and one thing about Ellen you love most. Keep it in her own words, this is just a stand-in so you can see how it will look."
+      { src: "random.jpg", caption: "test" }
   },
   {
     day: 2,
@@ -91,7 +91,7 @@ const PEOPLE = [
     day: 6,
     name: "Marina Atef",
     relation: "friend",
-    city: "Austin, TX", // placeholder — swap for the actual city
+    city: "Houston, TX", // placeholder — swap for the actual city
     country: "USA",
     lat: 30.2672,
     lon: -97.7431,
@@ -135,10 +135,10 @@ const PEOPLE = [
     day: 10,
     name: "Mina",
     relation: "your husband",
-    city: "Texas", // placeholder — swap for your actual city
+    city: "Houston, TX", // placeholder — swap for your actual city
     country: "USA",
-    lat: 31.9686,
-    lon: -99.9018,
+    lat: 29.7604,
+    lon: -95.3698,
     type: "giftlist",
     intro:
       "Happy 30th, habibti. Nine people who love you sent their light across the world this week. Here's mine — ten small things, and what each one means.",
