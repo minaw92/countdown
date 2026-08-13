@@ -22,8 +22,8 @@
    ============================================================ */
 
 const COUNTDOWN = {
-  startDate: "2026-08-11",
-  endDate: "2026-08-20",
+  startDate: "2026-08-04",
+  endDate: "2026-08-13",
   herName: "Ellen",
   passcode: "mina"
 };
@@ -43,40 +43,6 @@ const PEOPLE = [
   },
   {
     day: 2,
-    name: "Marina Henry",
-    relation: "friend",
-    city: "Cairo",
-    country: "Egypt",
-    lat: 30.0444,
-    lon: 31.2357,
-    type: "letter",
-    content:
-      "PLACEHOLDER — replace with Marina Henry's message.\n\nCan be text, or swap type to \"photo\" or \"video\" if she'd rather send one of those instead."
-  },
-  {
-    day: 3,
-    name: "Alaa",
-    relation: "friend",
-    city: "Cairo",
-    country: "Egypt",
-    lat: 30.0444,
-    lon: 31.2357,
-    type: "letter",
-    content: "PLACEHOLDER — replace with Alaa's message."
-  },
-  {
-    day: 4,
-    name: "Sico",
-    relation: "friend",
-    city: "Cairo",
-    country: "Egypt",
-    lat: 30.0444,
-    lon: 31.2357,
-    type: "letter",
-    content: "PLACEHOLDER — replace with Sico's message."
-  },
-  {
-    day: 5,
     name: "Ero",
     relation: "friend",
     city: "Houston, TX", // placeholder — swap for the actual city
@@ -87,29 +53,40 @@ const PEOPLE = [
     content: "PLACEHOLDER — replace with Ero's message."
   },
   {
-    day: 6,
+    day: 3,
+    name: "Paula & his wife",
+    relation: "friends",
+    city: "Prague",
+    country: "Czech Republic",
+    lat: 50.0755,
+    lon: 14.4378,
+    type: "letter",
+    content: "PLACEHOLDER — replace with Paula and his wife's message."
+  },
+  {
+    day: 4,
+    name: "Alaa",
+    relation: "friend",
+    city: "Cairo",
+    country: "Egypt",
+    lat: 30.0444,
+    lon: 31.2357,
+    type: "letter",
+    content: "PLACEHOLDER — replace with Alaa's message."
+  },
+  {
+    day: 5,
     name: "Marina Atef",
     relation: "friend",
     city: "Houston, TX", // placeholder — swap for the actual city
     country: "USA",
-    lat: 30.2672,
-    lon: -97.7431,
+    lat: 29.7604,
+    lon: -95.3698,
     type: "letter",
     content: "PLACEHOLDER — replace with Marina Atef's message."
   },
   {
-    day: 7,
-    name: "Your brother",
-    relation: "brother",
-    city: "Amsterdam",
-    country: "Netherlands",
-    lat: 52.3676,
-    lon: 4.9041,
-    type: "letter",
-    content: "PLACEHOLDER — replace with her brother's message."
-  },
-  {
-    day: 8,
+    day: 6,
     name: "Miro",
     relation: "friend",
     city: "Lisbon", // placeholder — confirm Portugal vs Spain, swap city
@@ -120,15 +97,38 @@ const PEOPLE = [
     content: "PLACEHOLDER — confirm Miro's country/city, then replace with their message."
   },
   {
-    day: 9,
-    name: "Paula & his wife",
-    relation: "friends",
-    city: "Prague",
-    country: "Czech Republic",
-    lat: 50.0755,
-    lon: 14.4378,
+    day: 7,
+    name: "Sico",
+    relation: "friend",
+    city: "Cairo",
+    country: "Egypt",
+    lat: 30.0444,
+    lon: 31.2357,
     type: "letter",
-    content: "PLACEHOLDER — replace with Paula and his wife's message."
+    content: "PLACEHOLDER — replace with Sico's message."
+  },
+  {
+    day: 8,
+    name: "Your brother",
+    relation: "brother",
+    city: "Amsterdam",
+    country: "Netherlands",
+    lat: 52.3676,
+    lon: 4.9041,
+    type: "letter",
+    content: "PLACEHOLDER — replace with her brother's message."
+  },
+  {
+    day: 9,
+    name: "Marina Henry",
+    relation: "friend",
+    city: "Cairo",
+    country: "Egypt",
+    lat: 30.0444,
+    lon: 31.2357,
+    type: "letter",
+    content:
+      "PLACEHOLDER — replace with Marina Henry's message.\n\nCan be text, or swap type to \"photo\" or \"video\" if she'd rather send one of those instead."
   },
   {
     day: 10,
