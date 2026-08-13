@@ -22,8 +22,8 @@
    ============================================================ */
 
 const COUNTDOWN = {
-  startDate: "2026-08-11",
-  endDate: "2026-08-13",
+  startDate: "2026-09-17",
+  endDate: "2026-09-26",
   herName: "Ellen",
   passcode: "mina"
 };

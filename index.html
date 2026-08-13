@@ -614,6 +614,15 @@
       return Math.floor((b - a) / (1000 * 60 * 60 * 24));
     }
     function currentUnlockedDay() {
+      // Preview override for local testing: add ?day=5 to the URL to see the
+      // map as it will look on day 5. Ignored when the parameter is absent,
+      // so the live site always goes by the real date.
+      const preview = new URLSearchParams(location.search).get('day');
+      if (preview !== null) {
+        const n = parseInt(preview, 10);
+        if (!isNaN(n)) return Math.max(0, Math.min(n, 10));
+      }
+
       const start = new Date(COUNTDOWN.startDate + 'T00:00:00');
       const today = new Date();
       const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
