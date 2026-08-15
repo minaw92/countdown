@@ -5,23 +5,33 @@ countdown today is, and emails her a nudge with a link to the map. Sends
 nothing before the countdown starts or after it ends, so the schedule can
 be left switched on and forgotten.
 
+Sends through Gmail's SMTP server rather than SES. Gmail publishes a DMARC
+policy, so mail claiming to come from a gmail.com address but sent by
+Amazon fails authentication and is discarded silently — no bounce, nothing
+in the spam folder. Sending through Gmail itself means the message really
+does come from that account, so it authenticates and arrives.
+
 Environment variables (set these on the Lambda):
-    START_DATE   first day of the countdown, e.g. 2026-09-17
-    SITE_URL     link to the site
-    TO_EMAIL     her address
-    FROM_EMAIL   a verified SES sender
-    HER_NAME     defaults to Ellen
+    START_DATE    first day of the countdown, e.g. 2026-09-17
+    SITE_URL      link to the site
+    TO_EMAIL      her address
+    FROM_EMAIL    the Gmail address the app password belongs to
+    GMAIL_APP_PASSWORD  16-character app password, no spaces
+    HER_NAME      defaults to Ellen
+    FROM_NAME     name she sees in her inbox, defaults to Mina
+    TEST_DAY      optional, forces a day for testing
 """
 
 import os
 import datetime
+import smtplib
 import zoneinfo
-
-import boto3
-from botocore.exceptions import ClientError
+from email.message import EmailMessage
 
 TIMEZONE = zoneinfo.ZoneInfo("America/Chicago")
 TOTAL_DAYS = 10
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 465
 
 # A different line each morning so the ten emails do not read identically.
 TEASERS = {
@@ -105,8 +115,51 @@ def build_html(name: str, day: int, teaser: str, site_url: str) -> str:
 </html>"""
 
 
+def resolve_day(event, start_date, today):
+    """Decide which day to send, honouring the test overrides.
+
+    Order of precedence, so a console test can always win:
+      1. "day" in the test event payload
+      2. TEST_DAY environment variable
+      3. today's real position in the countdown
+
+    Returns the day number, or 0 meaning send nothing.
+    """
+    override = None
+    source = None
+
+    if isinstance(event, dict) and event.get("day") is not None:
+        override = event["day"]
+        source = "event payload"
+    elif os.environ.get("TEST_DAY", "").strip():
+        override = os.environ["TEST_DAY"].strip()
+        source = "TEST_DAY variable"
+
+    if override is None:
+        return current_day(start_date, today)
+
+    try:
+        day = int(override)
+    except (TypeError, ValueError):
+        print(f"ignoring bad day override {override!r} from {source}")
+        return current_day(start_date, today)
+
+    if not 1 <= day <= TOTAL_DAYS:
+        print(f"ignoring out-of-range day {day} from {source}")
+        return current_day(start_date, today)
+
+    print(f"TEST: forcing day {day} from {source}")
+    return day
+
+
 def lambda_handler(event, context):
-    """Send today's email, if today is part of the countdown."""
+    """Send today's email, if today is part of the countdown.
+
+    For testing, force a specific day either by setting the TEST_DAY
+    environment variable, or by running a test with {"day": 3} as the
+    event. Remove TEST_DAY before the real run or every scheduled email
+    will announce the same day.
+    """
     start_date = datetime.date.fromisoformat(os.environ["START_DATE"])
     site_url = os.environ["SITE_URL"]
     to_email = os.environ["TO_EMAIL"]
@@ -116,7 +169,7 @@ def lambda_handler(event, context):
     # Use her local date, not the Lambda's UTC date, or the mail arrives
     # on the wrong day for anything scheduled near midnight.
     today = datetime.datetime.now(TIMEZONE).date()
-    day = current_day(start_date, today)
+    day = resolve_day(event, start_date, today)
 
     if day == 0:
         print(f"{today}: outside the countdown, nothing sent")
@@ -129,28 +182,45 @@ def lambda_handler(event, context):
         else f"Day {day} of {TOTAL_DAYS} is open"
     )
 
-    client = boto3.client("ses")
+    # A bare address reads as bulk mail. Sending as a person helps this
+    # land in the inbox rather than the spam folder.
+    sender_name = os.environ.get("FROM_NAME", "Mina")
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = f"{sender_name} <{from_email}>"
+    message["To"] = to_email
+
+    # Plain text first, then HTML. Mail clients show the last part they
+    # can render, so this gives HTML to those that support it and a
+    # readable message to those that do not.
+    message.set_content(
+        f"{name}, a new light is lit.\n\n"
+        f"{teaser}\n\n"
+        f"Open the map here:\n{site_url}\n\n"
+        f"— {sender_name}"
+    )
+    message.add_alternative(
+        build_html(name, day, teaser, site_url), subtype="html"
+    )
+
+    # App passwords are sometimes copied with the spaces Google shows.
+    password = os.environ["GMAIL_APP_PASSWORD"].replace(" ", "")
+
     try:
-        response = client.send_email(
-            Source=from_email,
-            Destination={"ToAddresses": [to_email]},
-            Message={
-                "Subject": {"Data": subject, "Charset": "UTF-8"},
-                "Body": {
-                    "Html": {
-                        "Data": build_html(name, day, teaser, site_url),
-                        "Charset": "UTF-8",
-                    },
-                    "Text": {
-                        "Data": f"{teaser}\n\n{site_url}",
-                        "Charset": "UTF-8",
-                    },
-                },
-            },
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+            smtp.login(from_email, password)
+            smtp.send_message(message)
+    except smtplib.SMTPAuthenticationError:
+        print(
+            "Gmail rejected the login. Check GMAIL_APP_PASSWORD is an app "
+            "password (not the account password) and that it belongs to "
+            f"{from_email}."
         )
-    except ClientError as error:
-        print(f"SES refused to send day {day}: {error}")
+        raise
+    except OSError as error:
+        print(f"Could not reach Gmail to send day {day}: {error}")
         raise
 
-    print(f"{today}: sent day {day}, message {response['MessageId']}")
-    return {"sent": True, "day": day, "messageId": response["MessageId"]}
+    print(f"{today}: sent day {day} to {to_email}")
+    return {"sent": True, "day": day}
