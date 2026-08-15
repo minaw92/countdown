@@ -6,20 +6,49 @@ up over someone's city and a gold thread reaches toward Texas. Clicking an
 unlocked pin opens their letter, photo, or video. Day 10, her birthday, is
 your gift list.
 
+## The one rule
+
+`content.js` holds the letters and the photo/video links **in plain text**.
+It is gitignored and must never be committed. What gets published is
+`content.enc`, the same file encrypted with the passcode.
+
+That matters because the repo and the published site are both public.
+Before, anyone could open `.../content.js` in a browser and read every
+letter and every Drive link without a password. Now that file isn't on the
+server at all — only ciphertext is.
+
+**Every time you edit `content.js`, run:**
+
+```
+node build.js
+```
+
+Then commit `content.enc`. If you forget, the site keeps showing the old
+content, because the site never reads `content.js`.
+
 ## Before you publish
 
 **1. Edit `content.js`**
 This is the only file you'll touch regularly. Each person is one block with
 placeholder text in it right now. As people send you their letters, photos,
-or videos, paste them in.
+or videos, paste them in. The file's own header has the full field guide.
 
 - Text letter: just replace the placeholder string.
-- Photo: change `type` to `"photo"` and set `content: { src: "...", caption: "..." }`.
-  Put the actual image file in this same folder (e.g. `photos/sister.jpg`) and
-  point `src` to it, or use a direct image link.
-- Video: change `type` to `"video"` and set `content: { embedUrl: "...", caption: "..." }`.
-  Easiest source is an *unlisted* YouTube video, use the embed link, it looks
-  like `https://www.youtube.com/embed/VIDEO_ID`.
+- Photo: `content: { src: "...", caption: "..." }`
+- Video: `content: { embedUrl: "...", caption: "..." }`
+- Several things from one person: use an `items: [ ... ]` array.
+
+Do **not** put real photos or videos in this repo. Host them and link:
+
+| | link to use |
+|---|---|
+| Drive photo | `https://drive.google.com/thumbnail?id=FILE_ID&sz=w1200` |
+| Drive video | `https://drive.google.com/file/d/FILE_ID/preview` |
+| YouTube video | `https://www.youtube.com/embed/VIDEO_ID` (upload as *unlisted*) |
+
+Get `FILE_ID` from the Drive share link, the part between `/d/` and `/view`.
+**The file must be shared as "Anyone with the link"** or it shows up broken.
+Pasting the `/view` link itself will not work — that's a web page, not an image.
 
 **2. Confirm two open details**
 - Miro: Portugal or Spain, and which city, then update `city`, `country`,

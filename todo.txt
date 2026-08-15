@@ -1,0 +1,3 @@
+1- my list
+2- where to host repo
+3- collect items

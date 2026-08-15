@@ -1,0 +1,8 @@
+# The real content lives here in plain text: letters, and the Drive /
+# YouTube links. It must NEVER be committed — the repo and the published
+# site are both public. Only the encrypted content.enc gets committed.
+content.js
+
+# Local scratch
+.DS_Store
+Thumbs.db

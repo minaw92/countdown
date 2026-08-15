@@ -306,30 +306,46 @@
       r: 7;
     }
 
-    .pin-label {
-      font-family: 'Jost', sans-serif;
-      font-size: 9px;
-      letter-spacing: .02em;
-      fill: var(--cream);
+    /* ---------- avatar pins ---------- */
+    .pin-avatar {
       pointer-events: none;
-      paint-order: stroke;
-      stroke: rgba(18, 22, 42, 0.85);
-      stroke-width: 2.5px;
-      stroke-linejoin: round;
     }
 
-    .pin-label.locked {
-      fill: var(--locked);
-      opacity: .7;
+    .pin-avatar-ring {
+      fill: none;
+      stroke: var(--gold);
+      stroke-width: 1.4;
+      pointer-events: none;
     }
 
-    .label-leader {
-      stroke: rgba(217, 168, 87, 0.45);
-      stroke-width: .6;
+    .pin-group.today .pin-avatar-ring {
+      stroke: var(--gold-bright);
+      stroke-width: 1.8;
     }
 
-    .label-leader.locked {
-      stroke: var(--locked-line);
+    .pin-group.final .pin-avatar-ring {
+      stroke: var(--rust);
+    }
+
+    /* Scale about the pin's own coordinate (0,0 inside its translated
+       group), NOT transform-origin:center — on an SVG <image> that is
+       offset by a large negative x/y for the zoom crop, "center" resolves
+       against the image's own box and the avatar lunges away from the
+       cursor instead of growing in place. */
+    .pin-group .pin-avatar,
+    .pin-group .pin-avatar-ring {
+      transition: transform .2s ease;
+      transform-origin: 0 0;
+      transform-box: view-box;
+    }
+
+    .pin-group.unlocked:hover .pin-avatar,
+    .pin-group.unlocked:hover .pin-avatar-ring {
+      transform: scale(3.1);
+    }
+
+    .pin-group.unlocked:hover .pin-avatar-ring {
+      stroke-width: 0.7;
     }
 
     footer.bottom {
@@ -429,6 +445,30 @@
       width: 100%;
       border-radius: 8px;
       margin-bottom: 12px;
+    }
+
+    /* one person can send several things, so each piece needs breathing
+       room from the next */
+    #modal .media {
+      margin: 0 0 6px;
+    }
+
+    #modal .letter + .media,
+    #modal .media + .media,
+    #modal .media + .letter {
+      margin-top: 22px;
+    }
+
+    #modal .media img,
+    #modal .media iframe {
+      margin-bottom: 8px;
+    }
+
+    /* a Drive photo is shown in Drive's own viewer, which suits a
+       squarer frame than the 16/9 used for video */
+    #modal .drive-photo iframe {
+      aspect-ratio: 4 / 3;
+      background: rgba(0, 0, 0, .25);
     }
 
     #modal .caption {
@@ -581,302 +621,533 @@
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
-  <script src="content.js"></script>
   <script>
     (function () {
-    /* ============================================================
-       Passcode gate
-       ============================================================ */
-    const gate = document.getElementById('gate');
-    const app = document.getElementById('app');
-    const pwInput = document.getElementById('passcode-input');
-    const pwBtn = document.getElementById('passcode-btn');
-    const pwErr = document.getElementById('passcode-err');
+      /* ============================================================
+         Passcode gate
 
-    function tryUnlock() {
-      const val = pwInput.value.trim().toLowerCase();
-      if (val === COUNTDOWN.passcode.toLowerCase()) {
-        localStorage.setItem('ellen30_unlocked', 'true');
+         The content is NOT shipped in the clear. content.enc is an
+         encrypted blob and the passcode is the key that decrypts it,
+         not a value we compare against. Someone who opens content.enc
+         directly sees only ciphertext — no letters, no photo or video
+         links. A wrong passcode fails to decrypt, so there is nothing
+         to bypass by editing the page.
+         ============================================================ */
+      const gate = document.getElementById('gate');
+      const app = document.getElementById('app');
+      const pwInput = document.getElementById('passcode-input');
+      const pwBtn = document.getElementById('passcode-btn');
+      const pwErr = document.getElementById('passcode-err');
+
+      // must match build.js
+      const ITERATIONS = 250000;
+      const STORE_KEY = 'ellen30_pass';
+
+      let encryptedBlob = null;
+
+      function base64ToBytes(b64) {
+        const bin = atob(b64);
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out;
+      }
+
+      async function loadBlob() {
+        if (encryptedBlob) return encryptedBlob;
+        const res = await fetch('content.enc', { cache: 'no-store' });
+        if (!res.ok) throw new Error('missing');
+        encryptedBlob = base64ToBytes((await res.text()).trim());
+        return encryptedBlob;
+      }
+
+      // While developing, content.js sits next to index.html and is read
+      // directly, so edits show up on refresh with no build step. On the
+      // published site that file does not exist (it is gitignored), the
+      // fetch 404s, and we fall through to the encrypted blob.
+      let plainSource;
+      async function loadPlain() {
+        if (plainSource !== undefined) return plainSource;
+        try {
+          const res = await fetch('content.js', { cache: 'no-store' });
+          const text = res.ok ? await res.text() : null;
+          // a 404 page is HTML, not our file — check it looks right
+          plainSource = text && /const\s+PEOPLE\s*=/.test(text) ? text : null;
+        } catch (err) {
+          plainSource = null;
+        }
+        return plainSource;
+      }
+
+      // Returns the decrypted content.js source, or null if the
+      // passcode is wrong (AES-GCM fails authentication).
+      async function decrypt(passcode) {
+        const blob = await loadBlob();
+        const salt = blob.slice(0, 16);
+        const iv = blob.slice(16, 28);
+        const tag = blob.slice(28, 44);
+        const data = blob.slice(44);
+
+        // WebCrypto expects the GCM tag appended to the ciphertext
+        const body = new Uint8Array(data.length + tag.length);
+        body.set(data, 0);
+        body.set(tag, data.length);
+
+        const baseKey = await crypto.subtle.importKey(
+          'raw', new TextEncoder().encode(passcode), 'PBKDF2', false, ['deriveKey']
+        );
+        const key = await crypto.subtle.deriveKey(
+          { name: 'PBKDF2', salt, iterations: ITERATIONS, hash: 'SHA-256' },
+          baseKey,
+          { name: 'AES-GCM', length: 256 },
+          false,
+          ['decrypt']
+        );
+
+        try {
+          const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, body);
+          return new TextDecoder().decode(plain);
+        } catch (err) {
+          return null;               // wrong passcode
+        }
+      }
+
+      // Runs the decrypted file and lifts its two top-level consts onto
+      // window, where the rest of the page expects to find them. A plain
+      // eval would leave them trapped in this function's scope.
+      function activate(source) {
+        const factory = new Function(source + '\n;return { COUNTDOWN, PEOPLE };');
+        const data = factory();
+        window.COUNTDOWN = data.COUNTDOWN;
+        window.PEOPLE = data.PEOPLE;
+      }
+
+      async function tryUnlock(passcode, quiet) {
+        const val = (passcode !== undefined ? passcode : pwInput.value).trim();
+        if (!val) return false;
+
+        if (!quiet) {
+          pwBtn.disabled = true;
+          pwErr.textContent = 'Opening…';
+        }
+
+        let source;
+        try {
+          // Local development: read content.js straight off disk so edits
+          // appear on refresh. The passcode is still checked against the
+          // one inside the file, so the gate behaves the same either way.
+          source = await loadPlain();
+          if (source) {
+            const m = source.match(/passcode:\s*["'](.+?)["']/);
+            if (!m || m[1] !== val) source = null;
+          } else {
+            source = await decrypt(val);
+          }
+        } catch (err) {
+          pwBtn.disabled = false;
+          pwErr.textContent = 'Could not load the page. Please refresh.';
+          return false;
+        }
+
+        pwBtn.disabled = false;
+
+        if (source === null) {
+          if (!quiet) pwErr.textContent = "That's not it, try again.";
+          return false;
+        }
+
+        activate(source);
+        localStorage.setItem(STORE_KEY, val);
+        pwErr.textContent = '';
         gate.style.display = 'none';
         app.hidden = false;
         initApp();
-      } else {
-        pwErr.textContent = "That's not it, try again.";
-      }
-    }
-    pwBtn.addEventListener('click', tryUnlock);
-    pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
-
-    /* ============================================================
-       Date / unlock logic
-       ============================================================ */
-    function daysBetween(a, b) {
-      return Math.floor((b - a) / (1000 * 60 * 60 * 24));
-    }
-    function currentUnlockedDay() {
-      // Preview override for local testing: add ?day=5 to the URL to see the
-      // map as it will look on day 5. Ignored when the parameter is absent,
-      // so the live site always goes by the real date.
-      const preview = new URLSearchParams(location.search).get('day');
-      if (preview !== null) {
-        const n = parseInt(preview, 10);
-        if (!isNaN(n)) return Math.max(0, Math.min(n, 10));
+        return true;
       }
 
-      const start = new Date(COUNTDOWN.startDate + 'T00:00:00');
-      const today = new Date();
-      const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const diff = daysBetween(start, t0); // 0 on startDate
-      if (diff < 0) return 0;
-      return Math.min(diff + 1, 10);
-    }
+      pwBtn.addEventListener('click', () => tryUnlock());
+      pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
 
-    /* ============================================================
-       Stars background
-       ============================================================ */
-    (function makeStars() {
-      const container = document.getElementById('stars');
-      const n = 70;
-      for (let i = 0; i < n; i++) {
-        const s = document.createElement('span');
-        s.style.left = Math.random() * 100 + '%';
-        s.style.top = Math.random() * 100 + '%';
-        s.style.animationDelay = (Math.random() * 4) + 's';
-        container.appendChild(s);
+      /* ============================================================
+         Date / unlock logic
+         ============================================================ */
+      function daysBetween(a, b) {
+        return Math.floor((b - a) / (1000 * 60 * 60 * 24));
       }
-    })();
-
-    /* ============================================================
-       Map + pins
-       ============================================================ */
-    let appInitialized = false;
-
-    function initApp() {
-      if (appInitialized) return;
-      appInitialized = true;
-
-      const svg = d3.select('#map-svg');
-      const width = 960, height = 500;
-      const projection = d3.geoNaturalEarth1().scale(175).translate([width / 2, height / 2 + 20]);
-      const path = d3.geoPath(projection);
-
-      const unlockedDay = currentUnlockedDay();
-      document.getElementById('lit-count').textContent = unlockedDay;
-
-      const finalPerson = PEOPLE.find(p => p.day === 10);
-
-      // Group people by city. A city with several people gets its pins laid
-      // out in a short vertical stack and ONE shared label block beside them,
-      // so names never overlap each other the way per-pin labels did.
-      const pinXY = new Map();
-      const clusters = [];
-      const coordGroups = new Map();
-      PEOPLE.forEach(p => {
-        const key = p.lat.toFixed(2) + ',' + p.lon.toFixed(2);
-        if (!coordGroups.has(key)) coordGroups.set(key, []);
-        coordGroups.get(key).push(p);
-      });
-
-      const rowHeight = 13;
-
-      coordGroups.forEach(group => {
-        const [cx, cy] = projection([group[0].lon, group[0].lat]);
-        // label sits on whichever side has more room, so it never runs off-map
-        const side = cx > width * 0.62 ? -1 : 1;
-        const members = [...group].sort((a, b) => a.day - b.day);
-
-        if (members.length === 1) {
-          pinXY.set(members[0], [cx, cy]);
-        } else {
-          // stack the dots vertically, centred on the true city point
-          const top = cy - ((members.length - 1) * rowHeight) / 2;
-          members.forEach((p, i) => pinXY.set(p, [cx, top + i * rowHeight]));
+      function currentUnlockedDay() {
+        // Preview override for local testing: add ?day=5 to the URL to see the
+        // map as it will look on day 5. Ignored when the parameter is absent,
+        // so the live site always goes by the real date.
+        const preview = new URLSearchParams(location.search).get('day');
+        if (preview !== null) {
+          const n = parseInt(preview, 10);
+          if (!isNaN(n)) return Math.max(0, Math.min(n, 10));
         }
 
-        clusters.push({ members, cx, cy, side });
-      });
+        const start = new Date(COUNTDOWN.startDate + 'T00:00:00');
+        const today = new Date();
+        const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const diff = daysBetween(start, t0); // 0 on startDate
+        if (diff < 0) return 0;
+        return Math.min(diff + 1, 10);
+      }
 
-      d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(world => {
-        const land = topojson.feature(world, world.objects.countries);
+      /* ============================================================
+         Stars background
+         ============================================================ */
+      (function makeStars() {
+        const container = document.getElementById('stars');
+        const n = 70;
+        for (let i = 0; i < n; i++) {
+          const s = document.createElement('span');
+          s.style.left = Math.random() * 100 + '%';
+          s.style.top = Math.random() * 100 + '%';
+          s.style.animationDelay = (Math.random() * 4) + 's';
+          container.appendChild(s);
+        }
+      })();
 
-        svg.append('g')
-          .selectAll('path')
-          .data(land.features)
-          .join('path')
-          .attr('class', 'land')
-          .attr('d', path);
+      /* ============================================================
+         Map + pins
+         ============================================================ */
+      let appInitialized = false;
 
-        drawThreads();
-        drawPins();
-      }).catch(() => {
-        // if offline, still draw pins without the landmass outline
-        drawThreads();
-        drawPins();
-      });
+      function initApp() {
+        if (appInitialized) return;
+        appInitialized = true;
 
-      function drawThreads() {
-        const threadsGroup = svg.append('g').attr('class', 'threads');
-        const [fx, fy] = pinXY.get(finalPerson);
-        PEOPLE.filter(p => p.day < 10 && p.day <= unlockedDay).forEach(p => {
-          const [x1, y1] = pinXY.get(p);
-          // stop short of the final pin so threads don't bury it or the
-          // other pins sharing its city
-          const dx = fx - x1, dy = fy - y1;
-          const len = Math.hypot(dx, dy) || 1;
-          const x2 = fx - (dx / len) * 7;
-          const y2 = fy - (dy / len) * 7;
-          const mx = (x1 + x2) / 2;
-          const my = Math.min(y1, y2) - 40;
-          const d = `M${x1},${y1} Q${mx},${my} ${x2},${y2}`;
-          threadsGroup.append('path')
-            .attr('class', 'thread')
-            .attr('d', d)
-            .attr('stroke-dasharray', function () { return this.getTotalLength(); })
-            .attr('stroke-dashoffset', function () { return this.getTotalLength(); })
-            .transition().duration(1200).delay(300)
-            .attr('stroke-dashoffset', 0)
-            .on('end', function () { d3.select(this).attr('stroke-dasharray', '6 4'); });
+        const svg = d3.select('#map-svg');
+        const width = 960, height = 500;
+        const projection = d3.geoNaturalEarth1().scale(175).translate([width / 2, height / 2 + 20]);
+        const path = d3.geoPath(projection);
+
+        const unlockedDay = currentUnlockedDay();
+        document.getElementById('lit-count').textContent = unlockedDay;
+
+        const finalPerson = PEOPLE.find(p => p.day === 10);
+
+        // Group people by city. People sharing a city would otherwise stack
+        // into one unclickable pin, so spread them in a ring around the true
+        // point — sized so the avatars sit side by side without overlapping.
+        const pinXY = new Map();
+        const coordGroups = new Map();
+        PEOPLE.forEach(p => {
+          const key = p.lat.toFixed(2) + ',' + p.lon.toFixed(2);
+          if (!coordGroups.has(key)) coordGroups.set(key, []);
+          coordGroups.get(key).push(p);
         });
-      }
 
-      function drawPins() {
-        const pinsGroup = svg.append('g').attr('class', 'pins');
+        coordGroups.forEach(group => {
+          const [cx, cy] = projection([group[0].lon, group[0].lat]);
+          const members = [...group].sort((a, b) => a.day - b.day);
 
-        // draw unlocked pins last (on top) so an overlapping locked pin can
-        // never sit above and block clicks on a clickable one
-        const drawOrder = [...PEOPLE].sort((a, b) => (a.day <= unlockedDay) - (b.day <= unlockedDay));
+          if (members.length === 1) {
+            pinXY.set(members[0], [cx, cy]);
+            return;
+          }
 
-        const nodes = pinsGroup.selectAll('g.pin-group')
-          .data(drawOrder)
-          .join('g')
-          .attr('class', p => {
-            let cls = 'pin-group ';
-            if (p.day === 10) cls += 'final ';
-            if (p.day === unlockedDay) cls += 'today unlocked';
-            else if (p.day < unlockedDay) cls += 'unlocked';
-            else cls += 'locked';
-            return cls;
-          })
-          .attr('transform', p => {
-            const [x, y] = pinXY.get(p);
-            return `translate(${x},${y})`;
-          });
-
-        nodes.append('circle').attr('class', 'pin-hit').attr('r', 9);
-        nodes.append('circle').attr('class', 'pin-halo').attr('r', 5);
-        nodes.append('circle').attr('class', 'pin-dot').attr('r', 3.2);
-
-        nodes.filter(p => p.day <= unlockedDay)
-          .on('click', (event, p) => openModal(p));
-
-        nodes.filter(p => p.day <= unlockedDay)
-          .append('title')
-          .text(p => `${p.name} — ${p.city}, ${p.country}`);
-
-        drawLabels();
-      }
-
-      // One label block per city: names listed beside the cluster, each name
-      // on its own row aligned with its dot, joined by a short leader line.
-      function drawLabels() {
-        const labelsGroup = svg.append('g').attr('class', 'labels');
-
-        // Collect every label row first, then push apart any rows that would
-        // collide — this catches separate cities that sit close together
-        // (Amsterdam/Prague) as well as people sharing one city.
-        const rows = [];
-        clusters.forEach(cluster => {
-          const { members, cx, side } = cluster;
-          const labelX = cx + side * 11;
-          members.forEach(p => {
-            const [, py] = pinXY.get(p);
-            rows.push({ p, cx, side, labelX, py, textY: py });
+          // radius grows with the count so neighbouring hit circles (17px
+          // for avatars) never overlap and steal each other's clicks
+          const ringRadius = Math.max(20, 7.5 * members.length);
+          members.forEach((p, i) => {
+            const angle = (2 * Math.PI * i) / members.length - Math.PI / 2;
+            pinXY.set(p, [cx + ringRadius * Math.cos(angle), cy + ringRadius * Math.sin(angle)]);
           });
         });
 
-        // only rows whose labels start near each other can actually collide
-        rows.sort((a, b) => a.textY - b.textY);
-        for (let i = 1; i < rows.length; i++) {
-          const cur = rows[i];
-          for (let j = 0; j < i; j++) {
-            const prev = rows[j];
-            const sameBand = Math.abs(cur.labelX - prev.labelX) < 90 && cur.side === prev.side;
-            if (sameBand && cur.textY - prev.textY < rowHeight) {
-              cur.textY = prev.textY + rowHeight;
+        // Clustering only separates people sharing a city. Genuinely close
+        // cities (Prague/Amsterdam) can still collide, so push any remaining
+        // overlaps apart — otherwise one pin sits on another's click target
+        // and its enlarged hover covers the neighbour.
+        // Must clear twice the avatar hit radius (13) with room to spare.
+        const minGap = 38;
+        for (let pass = 0; pass < 40; pass++) {
+          let moved = false;
+          for (let i = 0; i < PEOPLE.length; i++) {
+            for (let j = i + 1; j < PEOPLE.length; j++) {
+              const a = pinXY.get(PEOPLE[i]), b = pinXY.get(PEOPLE[j]);
+              let dx = b[0] - a[0], dy = b[1] - a[1];
+              let d = Math.hypot(dx, dy);
+              if (d >= minGap) continue;
+              if (d < 0.01) { dx = 1; dy = 0; d = 1; }        // identical points
+              const push = (minGap - d) / 2;
+              const ux = dx / d, uy = dy / d;
+              a[0] -= ux * push; a[1] -= uy * push;
+              b[0] += ux * push; b[1] += uy * push;
+              moved = true;
             }
           }
+          if (!moved) break;
         }
 
-        rows.forEach(row => {
-          const { p, cx, side, labelX, py, textY } = row;
-          const anchor = side === 1 ? 'start' : 'end';
-          const unlocked = p.day <= unlockedDay;
+        d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(world => {
+          const land = topojson.feature(world, world.objects.countries);
 
-          // leader line from the dot out to its name, angling to the row's
-          // final position if it had to be nudged to avoid a collision
-          labelsGroup.append('line')
-            .attr('class', 'label-leader' + (unlocked ? '' : ' locked'))
-            .attr('x1', cx + side * 5.5).attr('y1', py)
-            .attr('x2', labelX - side * 2).attr('y2', textY);
+          svg.append('g')
+            .selectAll('path')
+            .data(land.features)
+            .join('path')
+            .attr('class', 'land')
+            .attr('d', path);
 
-          labelsGroup.append('text')
-            .attr('class', 'pin-label' + (unlocked ? '' : ' locked'))
-            .attr('x', labelX)
-            .attr('y', textY + 3)
-            .attr('text-anchor', anchor)
-            .text(unlocked ? `${p.day}. ${p.name}` : `Day ${p.day}`);
+          drawThreads();
+          drawPins();
+        }).catch(() => {
+          // if offline, still draw pins without the landmass outline
+          drawThreads();
+          drawPins();
         });
+
+        function drawThreads() {
+          const threadsGroup = svg.append('g').attr('class', 'threads');
+          const [fx, fy] = pinXY.get(finalPerson);
+          PEOPLE.filter(p => p.day < 10 && p.day <= unlockedDay).forEach(p => {
+            const [x1, y1] = pinXY.get(p);
+            // stop short of the final pin so threads don't bury it or the
+            // other pins sharing its city
+            const dx = fx - x1, dy = fy - y1;
+            const len = Math.hypot(dx, dy) || 1;
+            const x2 = fx - (dx / len) * 7;
+            const y2 = fy - (dy / len) * 7;
+            const mx = (x1 + x2) / 2;
+            const my = Math.min(y1, y2) - 40;
+            const d = `M${x1},${y1} Q${mx},${my} ${x2},${y2}`;
+            threadsGroup.append('path')
+              .attr('class', 'thread')
+              .attr('d', d)
+              .attr('stroke-dasharray', function () { return this.getTotalLength(); })
+              .attr('stroke-dashoffset', function () { return this.getTotalLength(); })
+              .transition().duration(1200).delay(300)
+              .attr('stroke-dashoffset', 0)
+              .on('end', function () { d3.select(this).attr('stroke-dasharray', '6 4'); });
+          });
+        }
+
+        function drawPins() {
+          const pinsGroup = svg.append('g').attr('class', 'pins');
+
+          // Draw order sets stacking: locked pins first, then plain unlocked
+          // dots, then avatars last so an enlarged face is never covered.
+          // This is done up front rather than by re-ordering nodes on hover —
+          // moving a node in the DOM under a moving cursor cancels :hover in
+          // Chromium, which made the avatar refuse to grow.
+          const rank = p => {
+            if (p.day > unlockedDay) return 0;
+            return p.avatar ? 2 : 1;
+          };
+          const drawOrder = [...PEOPLE].sort((a, b) => rank(a) - rank(b));
+
+          const nodes = pinsGroup.selectAll('g.pin-group')
+            .data(drawOrder)
+            .join('g')
+            .attr('class', p => {
+              let cls = 'pin-group ';
+              if (p.day === 10) cls += 'final ';
+              if (p.day === unlockedDay) cls += 'today unlocked';
+              else if (p.day < unlockedDay) cls += 'unlocked';
+              else cls += 'locked';
+              return cls;
+            })
+            .attr('transform', p => {
+              const [x, y] = pinXY.get(p);
+              return `translate(${x},${y})`;
+            });
+
+          // hit area must cover the avatar at its hovered size (radius 9
+          // scaled by 1.85), otherwise the pin slips out from under the
+          // cursor as it grows and the hover flickers
+          nodes.append('circle')
+            .attr('class', 'pin-hit')
+            .attr('r', p => (p.avatar && p.day <= unlockedDay) ? 17 : 9);
+          nodes.append('circle').attr('class', 'pin-halo').attr('r', 5);
+
+          // People with an `avatar` in content.js get a round portrait once
+          // their day unlocks; everyone else keeps the plain gold dot. Locked
+          // days always stay a dot so the face is a reveal.
+          const avatarR = 9;
+          const defs = svg.append('defs');
+
+          nodes.each(function (p) {
+            const node = d3.select(this);
+            const showAvatar = p.avatar && p.day <= unlockedDay;
+
+            if (!showAvatar) {
+              node.append('circle').attr('class', 'pin-dot').attr('r', 3.2);
+              return;
+            }
+
+            const clipId = 'avatar-clip-' + p.day;
+            defs.append('clipPath')
+              .attr('id', clipId)
+              .append('circle')
+              .attr('r', avatarR);
+
+            // Every avatar renders at the SAME circle size. avatarZoom and
+            // avatarOffset only choose which part of the picture shows inside
+            // that circle — they must not change how big the pin appears, or
+            // people whose photo needed a tighter crop end up with a larger
+            // pin than everyone else.
+            const zoom = p.avatarZoom || 1;
+            const size = avatarR * 2 * zoom;
+            const ox = (p.avatarOffset && p.avatarOffset[0]) || 0;
+            const oy = (p.avatarOffset && p.avatarOffset[1]) || 0;
+
+            // wrapper is what scales on hover, so every pin grows identically
+            // regardless of the zoom used to frame its face
+            const holder = node.append('g').attr('class', 'pin-avatar');
+
+            holder.append('image')
+              .attr('href', p.avatar)
+              .attr('x', -size / 2 + ox * avatarR)
+              .attr('y', -size / 2 + oy * avatarR)
+              .attr('width', size)
+              .attr('height', size)
+              .attr('preserveAspectRatio', 'xMidYMid slice')
+              .attr('clip-path', `url(#${clipId})`);
+
+            node.append('circle')
+              .attr('class', 'pin-avatar-ring')
+              .attr('r', avatarR);
+          });
+
+          nodes.filter(p => p.day <= unlockedDay)
+            .on('click', (event, p) => openModal(p));
+
+          // no names on the map — hovering shows the native tooltip, and
+          // clicking opens the modal where the name is displayed in full
+          nodes.filter(p => p.day <= unlockedDay)
+            .append('title')
+            .text(p => `${p.day}. ${p.name} — ${p.city}, ${p.country}`);
+        }
       }
-    }
 
-    /* ============================================================
-       Modal content rendering
-       ============================================================ */
-    const backdrop = document.getElementById('modal-backdrop');
-    const modalBody = document.getElementById('modal-body');
-    document.getElementById('modal-close').addEventListener('click', closeModal);
-    backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(); });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+      /* ============================================================
+         Modal content rendering
+         ============================================================ */
+      const backdrop = document.getElementById('modal-backdrop');
+      const modalBody = document.getElementById('modal-body');
+      document.getElementById('modal-close').addEventListener('click', closeModal);
+      backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-    function closeModal() {
-      backdrop.classList.remove('show');
-    }
+      function closeModal() {
+        backdrop.classList.remove('show');
+      }
 
-    function openModal(p) {
-      let html = `<div class="tag">Day ${p.day} &middot; ${p.relation}</div>
+      function openModal(p) {
+        let html = `<div class="tag">Day ${p.day}</div>
               <h2>${p.name}</h2>
               <div class="place">${p.city}, ${p.country}</div>`;
 
-      if (p.type === 'letter') {
-        html += `<div class="letter">${escapeHtml(p.content)}</div>`;
-      } else if (p.type === 'photo') {
-        html += `<img src="${p.content.src}" alt="${escapeHtml(p.content.caption || '')}" />
-              <div class="caption">${escapeHtml(p.content.caption || '')}</div>`;
-      } else if (p.type === 'video') {
-        html += `<iframe src="${p.content.embedUrl}" allowfullscreen></iframe>
-              <div class="caption">${escapeHtml(p.content.caption || '')}</div>`;
-      } else if (p.type === 'giftlist') {
-        html += `<div class="gift-intro">${escapeHtml(p.intro || '')}</div>
-             <ul class="gift-list">` +
-          p.content.map(g => `<li><span class="gift-name">${escapeHtml(g.gift)}</span><span class="gift-reason">${escapeHtml(g.reason)}</span></li>`).join('') +
-          `</ul>`;
+        // A person may send any combination of things, so content.js can give
+        // them an `items` array. A single `type`/`content` pair still works and
+        // is treated as a one-item list.
+        const items = p.items
+          ? p.items
+          : [{ type: p.type, content: p.content, intro: p.intro }];
+
+        items.forEach(item => { html += renderItem(item); });
+
+        modalBody.innerHTML = html;
+        backdrop.classList.add('show');
       }
 
-      modalBody.innerHTML = html;
-      backdrop.classList.add('show');
-    }
+      // Paste links exactly as the site gives them to you — the ordinary
+      // Drive "Share" link, or the address bar of a YouTube video — and
+      // these turn them into the embeddable form. Already-correct links
+      // pass straight through untouched.
+      const DRIVE_ID = /(?:drive|docs)\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=)([\w-]{20,})/;
 
-    function escapeHtml(str) {
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
-    }
+      function driveId(url) {
+        const m = String(url).match(DRIVE_ID);
+        return m ? m[1] : null;
+      }
 
-    if (localStorage.getItem('ellen30_unlocked') === 'true') {
-      gate.style.display = 'none';
-      app.hidden = false;
-      initApp();
-    }
+      // Drive share link -> a URL that actually returns image bytes
+      function toImageUrl(url) {
+        const id = driveId(url);
+        if (id) return `https://drive.google.com/thumbnail?id=${id}&sz=w1600`;
+        return url;
+      }
+
+      // Drive share link / YouTube watch link -> an embeddable player URL
+      function toEmbedUrl(url) {
+        const id = driveId(url);
+        if (id) return `https://drive.google.com/file/d/${id}/preview`;
+
+        const s = String(url);
+        // youtu.be/ID  or  youtube.com/watch?v=ID  or  /shorts/ID
+        const yt = s.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:[^#]*&)?v=|shorts\/|embed\/))([\w-]{11})/);
+        if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+
+        return url;
+      }
+
+      // Renders one piece of a person's message. Anything unrecognised is
+      // skipped rather than breaking the whole modal.
+      function renderItem(item) {
+        if (!item || !item.type) return '';
+
+        if (item.type === 'letter') {
+          return `<div class="letter">${escapeHtml(item.content)}</div>`;
+        }
+
+        if (item.type === 'photo') {
+          const caption = item.content.caption || '';
+          const raw = item.content.src || item.content.url || item.content.embedUrl;
+          const cap = caption ? `<figcaption class="caption">${escapeHtml(caption)}</figcaption>` : '';
+
+          // Google blocks Drive images from loading in an <img> on another
+          // site (Chrome reports ERR_BLOCKED_BY_ORB), and no variant of the
+          // URL gets around it. Drive photos therefore go in an iframe, the
+          // same way the videos do. Everything else stays a normal image.
+          if (driveId(raw)) {
+            return `<figure class="media drive-photo">
+                <iframe src="${encodeURI(toEmbedUrl(raw))}" allowfullscreen loading="lazy"></iframe>
+                ${cap}
+              </figure>`;
+          }
+
+          return `<figure class="media">
+              <img src="${encodeURI(raw)}" alt="${escapeHtml(caption)}" loading="lazy" />
+              ${cap}
+            </figure>`;
+        }
+
+        if (item.type === 'video') {
+          const caption = item.content.caption || '';
+          // accept embedUrl, url or src so a mistyped key still works
+          const raw = item.content.embedUrl || item.content.url || item.content.src;
+          return `<figure class="media">
+              <iframe src="${encodeURI(toEmbedUrl(raw))}" allowfullscreen loading="lazy"></iframe>
+              ${caption ? `<figcaption class="caption">${escapeHtml(caption)}</figcaption>` : ''}
+            </figure>`;
+        }
+
+        if (item.type === 'giftlist') {
+          return `<div class="gift-intro">${escapeHtml(item.intro || '')}</div>
+             <ul class="gift-list">` +
+            item.content.map(g => `<li><span class="gift-name">${escapeHtml(g.gift)}</span><span class="gift-reason">${escapeHtml(g.reason)}</span></li>`).join('') +
+            `</ul>`;
+        }
+
+        return '';
+      }
+
+      function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
+      // Returning visitor: we stored her passcode, so decrypt straight
+      // away and skip the gate. If it fails (passcode changed since),
+      // fall back to showing the gate rather than an empty page.
+      const saved = localStorage.getItem(STORE_KEY);
+      if (saved) {
+        tryUnlock(saved, true).then(ok => {
+          if (!ok) localStorage.removeItem(STORE_KEY);
+        });
+      }
     })();
   </script>
 </body>
