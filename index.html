@@ -387,7 +387,10 @@
       max-width: 560px;
       width: 100%;
       max-height: 85vh;
+      max-height: 85dvh;
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
       padding: 34px 30px;
       position: relative;
       transform: translateY(12px);
@@ -399,13 +402,17 @@
     }
 
     #modal .close {
-      position: absolute;
-      top: 16px;
-      right: 18px;
+      position: sticky;
+      top: -10px;
+      float: right;
+      margin: -16px -12px 0 0;
+      z-index: 2;
+      width: 40px;
+      height: 40px;
       background: none;
       border: none;
       color: var(--cream-dim);
-      font-size: 1.4rem;
+      font-size: 1.6rem;
       cursor: pointer;
       line-height: 1;
     }
@@ -443,6 +450,10 @@
 
     #modal img {
       width: 100%;
+      height: auto;
+      max-height: 60vh;
+      max-height: 60dvh;
+      object-fit: contain;
       border-radius: 8px;
       margin-bottom: 12px;
     }
@@ -468,6 +479,8 @@
        squarer frame than the 16/9 used for video */
     #modal .drive-photo iframe {
       aspect-ratio: 4 / 3;
+      max-height: 60vh;
+      max-height: 60dvh;
       background: rgba(0, 0, 0, .25);
     }
 
@@ -480,6 +493,8 @@
     #modal iframe {
       width: 100%;
       aspect-ratio: 16/9;
+      max-height: 60vh;
+      max-height: 60dvh;
       border: none;
       border-radius: 8px;
       margin-bottom: 12px;
@@ -536,8 +551,27 @@
     }
 
     @media (max-width:520px) {
+      #modal-backdrop {
+        padding: 10px;
+      }
+
       #modal {
-        padding: 26px 20px;
+        padding: 24px 18px;
+        max-height: 92vh;
+        max-height: 92dvh;
+      }
+
+      /* portrait photos are the norm from a phone, so give the Drive
+         viewer a squarer frame and let images use more of the screen */
+      #modal .drive-photo iframe {
+        aspect-ratio: 3 / 4;
+      }
+
+      #modal img,
+      #modal iframe,
+      #modal .drive-photo iframe {
+        max-height: 70vh;
+        max-height: 70dvh;
       }
 
       header.top {
@@ -1048,6 +1082,21 @@
         items.forEach(item => { html += renderItem(item); });
 
         modalBody.innerHTML = html;
+
+        // If a direct Drive image URL fails (unshared file, or Drive refusing
+        // the request), swap that one photo back to Drive's embedded viewer.
+        modalBody.querySelectorAll('img[data-fallback]').forEach(img => {
+          img.addEventListener('error', () => {
+            const figure = img.closest('.media');
+            if (!figure) return;
+            figure.classList.add('drive-photo');
+            const frame = document.createElement('iframe');
+            frame.src = img.dataset.fallback;
+            frame.allowFullscreen = true;
+            img.replaceWith(frame);
+          }, { once: true });
+        });
+
         backdrop.classList.add('show');
       }
 
@@ -1096,19 +1145,15 @@
           const raw = item.content.src || item.content.url || item.content.embedUrl;
           const cap = caption ? `<figcaption class="caption">${escapeHtml(caption)}</figcaption>` : '';
 
-          // Google blocks Drive images from loading in an <img> on another
-          // site (Chrome reports ERR_BLOCKED_BY_ORB), and no variant of the
-          // URL gets around it. Drive photos therefore go in an iframe, the
-          // same way the videos do. Everything else stays a normal image.
-          if (driveId(raw)) {
-            return `<figure class="media drive-photo">
-                <iframe src="${encodeURI(toEmbedUrl(raw))}" allowfullscreen loading="lazy"></iframe>
-                ${cap}
-              </figure>`;
-          }
+          // A Drive share link is turned into a direct image URL so the photo
+          // renders as a plain picture. Showing it through Drive's own viewer
+          // instead puts its zoom controls on top and crops the sides on a
+          // phone. If that direct URL ever fails, fall back to the viewer.
+          const src = toImageUrl(raw);
+          const retry = driveId(raw) ? ` data-fallback="${encodeURI(toEmbedUrl(raw))}"` : '';
 
           return `<figure class="media">
-              <img src="${encodeURI(raw)}" alt="${escapeHtml(caption)}" loading="lazy" />
+              <img src="${encodeURI(src)}" alt="${escapeHtml(caption)}" loading="lazy"${retry} />
               ${cap}
             </figure>`;
         }
