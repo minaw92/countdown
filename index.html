@@ -1364,6 +1364,13 @@
          ============================================================ */
       const PROG_KEY = 'ellen-programme-v1';
 
+      // ?reset clears her progress through the programme. For testing the
+      // day without having to clear site data by hand — the real visit
+      // never carries it.
+      if (new URLSearchParams(location.search).has('reset')) {
+        try { localStorage.removeItem(PROG_KEY); } catch (err) { /* ignore */ }
+      }
+
       function progState() {
         try {
           return JSON.parse(localStorage.getItem(PROG_KEY)) || { open: 1, picks: {} };
