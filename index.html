@@ -526,7 +526,7 @@
     }
 
     #modal .prog li {
-      padding: 16px 0 16px 46px;
+      padding: 16px 0 16px 60px;
       position: relative;
       border-top: 1px solid rgba(217, 168, 87, 0.18);
     }
@@ -535,32 +535,37 @@
       position: absolute;
       left: 0;
       top: 14px;
-      width: 30px;
-      height: 30px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
-      border: 1px solid var(--gold);
-      color: var(--gold);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background .3s ease, color .3s ease, border-color .3s ease;
+      overflow: hidden;
+      border: 1px solid rgba(217, 168, 87, .45);
+      background: rgba(217, 168, 87, .07);
+      transition: border-color .3s ease, filter .3s ease, opacity .3s ease;
     }
 
-    #modal .prog .marker .step-icon {
-      width: 16px;
-      height: 16px;
+    #modal .prog .marker .step-pic {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      margin: 0;
+      border-radius: 0;
     }
 
-    /* a finished step fills in, so the day reads as a trail of things
-       already lived rather than a checklist */
-    #modal .prog li.done .marker {
-      background: var(--gold);
-      color: #1a2044;
-    }
-
+    /* a sealed step keeps its picture dimmed and desaturated, so it reads
+       as a hint rather than the thing itself */
     #modal .prog li.locked .marker {
-      border-color: rgba(217, 168, 87, .28);
-      color: rgba(217, 168, 87, .38);
+      border-color: rgba(217, 168, 87, .22);
+    }
+
+    #modal .prog li.locked .marker .step-pic {
+      filter: grayscale(1) brightness(.55);
+      opacity: .7;
+    }
+
+    #modal .prog li.done .marker {
+      border-color: var(--gold);
     }
 
     #modal .prog .step-title {
@@ -1358,28 +1363,28 @@
          both the pick and how far she has got are kept in the browser
          so closing the page does not lose her place.
          ============================================================ */
-      /* Each step can name an icon. They are drawn inline rather than
-         loaded, so they take the gold of the step they sit in and cost
-         nothing to fetch. Stroke-only, to match the pins and the map. */
-      const STEP_ICONS = {
-        coffee:  '<path d="M4 8h11v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8Z"/><path d="M15 9h2a2.5 2.5 0 0 1 0 5h-2"/><path d="M7 2v3M11 2v3"/>',
-        plate:   '<circle cx="11" cy="11" r="7"/><circle cx="11" cy="11" r="3"/>',
-        bag:     '<path d="M4 8h14l-1 11H5L4 8Z"/><path d="M8 8V6a3 3 0 0 1 6 0v2"/>',
-        lotus:   '<path d="M11 4c2 2.5 2 5.5 0 8-2-2.5-2-5.5 0-8Z"/><path d="M11 12c-2.5-1.5-5.5-1-7 1 2 2 5 2 7 0Z"/><path d="M11 12c2.5-1.5 5.5-1 7 1-2 2-5 2-7 0Z"/><path d="M4 17h14"/>',
-        parcel:  '<path d="M3 8h16v11H3V8Z"/><path d="M3 8l2-4h12l2 4"/><path d="M11 4v15"/>',
-        hands:   '<path d="M6 13V7a1.5 1.5 0 0 1 3 0v4"/><path d="M9 11V6a1.5 1.5 0 0 1 3 0v5"/><path d="M12 11V7a1.5 1.5 0 0 1 3 0v6"/><path d="M15 11a1.5 1.5 0 0 1 3 0v3a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5"/>',
-        glasses: '<path d="M5 4h5l-1 7a1.5 1.5 0 0 1-3 0L5 4Z"/><path d="M7.5 11v7M5 18h5"/><path d="M12 4h5l-1 7a1.5 1.5 0 0 1-3 0l-1-7Z"/><path d="M14.5 11v7M12 18h5"/>',
-        fork:    '<path d="M6 3v6a2 2 0 0 0 4 0V3"/><path d="M8 9v10"/><path d="M15 3c2 0 2 4 2 6s-1 2-2 2-2-.5-2-2 0-6 2-6Z"/><path d="M15 11v8"/>',
-        bottle:  '<path d="M9 3h4v4l2 3v9H7v-9l2-3V3Z"/><path d="M7 12h8"/>',
-        letter:  '<path d="M3 6h16v12H3V6Z"/><path d="m3 6 8 6 8-6"/>'
+      /* Each step names a picture. They are hotlinked from Unsplash, which
+         allows it, and sized down at the URL so a phone is not pulling full
+         resolution ten times over. A step with no picture simply has none. */
+      const STEP_IMAGES = {
+        coffee:  'photo-1541167760496-1628856ab772',
+        plate:   'photo-1533089860892-a7c6f0a88666',
+        bag:     'photo-1584917865442-de89df76afd3',
+        lotus:   'photo-1506126613408-eca07ce68773',
+        parcel:  'photo-1513885535751-8b9238bd345a',
+        hands:   'photo-1519823551278-64ac92734fb1',
+        glasses: 'photo-1543007630-9710e4a00a20',
+        fork:    'photo-1414235077428-338989a2e8c0',
+        bottle:  'photo-1510812431401-41d2bd2722f3',
+        letter:  'photo-1450101499163-c8848c66ca85'
       };
 
-      function stepIcon(name) {
-        const d = STEP_ICONS[name];
-        if (!d) return '';
-        return '<svg class="step-icon" viewBox="0 0 22 22" aria-hidden="true" ' +
-          'fill="none" stroke="currentColor" stroke-width="1.4" ' +
-          'stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+      function stepImage(name) {
+        const id = STEP_IMAGES[name];
+        if (!id) return '';
+        const src = 'https://images.unsplash.com/' + id +
+          '?w=200&h=200&q=65&auto=format&fit=crop';
+        return `<img class="step-pic" src="${src}" alt="" loading="lazy" />`;
       }
 
       const PROG_KEY = 'ellen-programme-v1';
@@ -1423,7 +1428,7 @@
             // a sealed step shows its icon and a one-line tease, never the
             // real title, so it reads as a promise rather than a contents page
             return `<li class="locked" data-step="${n}">
-                <span class="marker">${stepIcon(step.icon)}</span>
+                <span class="marker">${stepImage(step.icon)}</span>
                 <span class="step-title">${escapeHtml(step.teaser || '• • •')}</span>
                 <span class="sealed">${escapeHtml(step.sealed || 'Not yet.')}</span>
               </li>`;
@@ -1455,7 +1460,7 @@
           }
 
           return `<li class="${isDone ? 'done' : ''}" data-step="${n}">` +
-            `<span class="marker">${stepIcon(step.icon)}</span>${body}</li>`;
+            `<span class="marker">${stepImage(step.icon)}</span>${body}</li>`;
         }).join('');
 
         return `<div class="prog-intro">${escapeHtml(item.intro || '')}</div>
