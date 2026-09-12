@@ -500,6 +500,174 @@
       margin-bottom: 12px;
     }
 
+    /* ---------- day 10: the programme ----------
+       Ten steps she opens one at a time. A step stays sealed until the one
+       before it is done, so the day arrives in order without being tied to
+       a clock. Choices are real: what she picks is remembered. */
+    #modal .prog-intro {
+      font-size: 1rem;
+      line-height: 1.7;
+      margin-bottom: 6px;
+      color: var(--cream);
+    }
+
+    #modal .prog-progress {
+      font-size: .74rem;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--cream-dim);
+      margin-bottom: 20px;
+    }
+
+    #modal .prog {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      counter-reset: step;
+    }
+
+    #modal .prog li {
+      counter-increment: step;
+      padding: 16px 0 16px 42px;
+      position: relative;
+      border-top: 1px solid rgba(217, 168, 87, 0.18);
+    }
+
+    #modal .prog li:before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 16px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      font-size: .78rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .3s ease, color .3s ease;
+    }
+
+    /* a finished step keeps its number filled in, so the day reads as a
+       trail of things already lived rather than a checklist */
+    #modal .prog li.done:before {
+      /* a finished step shows a tick instead of its number; the li still
+         increments the counter so the steps after it stay numbered right */
+      content: "✓";
+      background: var(--gold);
+      color: #1a2044;
+      border-color: var(--gold);
+      font-size: .8rem;
+    }
+
+    #modal .prog li.locked:before {
+      border-color: rgba(217, 168, 87, .3);
+      color: rgba(217, 168, 87, .3);
+    }
+
+    #modal .prog .step-title {
+      font-weight: 500;
+      color: var(--gold-bright);
+      display: block;
+      margin-bottom: 3px;
+    }
+
+    #modal .prog li.locked .step-title {
+      color: rgba(232, 224, 208, .34);
+    }
+
+    #modal .prog .step-body {
+      color: var(--cream-dim);
+      font-size: .92rem;
+      line-height: 1.6;
+    }
+
+    #modal .prog .step-note {
+      display: block;
+      margin-top: 6px;
+      font-size: .84rem;
+      font-style: italic;
+      color: rgba(232, 224, 208, .55);
+    }
+
+    /* the two-option steps */
+    #modal .prog .choices {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    #modal .prog .choice {
+      flex: 1 1 42%;
+      min-width: 140px;
+      text-align: left;
+      padding: 11px 13px;
+      border-radius: 9px;
+      border: 1px solid rgba(217, 168, 87, .3);
+      background: rgba(217, 168, 87, .05);
+      color: var(--cream);
+      font: inherit;
+      font-size: .88rem;
+      line-height: 1.4;
+      cursor: pointer;
+      transition: background .2s ease, border-color .2s ease;
+    }
+
+    #modal .prog .choice:hover {
+      background: rgba(217, 168, 87, .12);
+      border-color: var(--gold);
+    }
+
+    #modal .prog .choice.picked {
+      background: rgba(217, 168, 87, .18);
+      border-color: var(--gold);
+      color: var(--gold-bright);
+    }
+
+    #modal .prog .chosen {
+      margin-top: 8px;
+      font-size: .88rem;
+      color: var(--gold-bright);
+    }
+
+    #modal .prog .chosen .redo {
+      background: none;
+      border: none;
+      color: var(--cream-dim);
+      font: inherit;
+      font-size: .8rem;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 0 0 0 8px;
+    }
+
+    /* the button that opens the next step */
+    #modal .prog .step-go {
+      margin-top: 12px;
+      padding: 10px 18px;
+      border-radius: 9px;
+      border: 1px solid var(--gold);
+      background: rgba(217, 168, 87, .12);
+      color: var(--gold-bright);
+      font: inherit;
+      font-size: .88rem;
+      cursor: pointer;
+      transition: background .2s ease;
+    }
+
+    #modal .prog .step-go:hover {
+      background: rgba(217, 168, 87, .22);
+    }
+
+    #modal .prog .sealed {
+      color: rgba(232, 224, 208, .34);
+      font-size: .9rem;
+      font-style: italic;
+    }
+
     #modal .gift-intro {
       font-size: 1rem;
       line-height: 1.7;
@@ -1097,6 +1265,8 @@
           }, { once: true });
         });
 
+        wireProgram(p);
+
         backdrop.classList.add('show');
       }
 
@@ -1168,6 +1338,10 @@
             </figure>`;
         }
 
+        if (item.type === 'program') {
+          return renderProgram(item);
+        }
+
         if (item.type === 'giftlist') {
           return `<div class="gift-intro">${escapeHtml(item.intro || '')}</div>
              <ul class="gift-list">` +
@@ -1176,6 +1350,113 @@
         }
 
         return '';
+      }
+
+      /* ============================================================
+         Day 10 — the programme
+         ------------------------------------------------------------
+         The day arrives one step at a time. A step is sealed until the
+         one before it has been opened, so she reads it in order, but
+         nothing is tied to a clock — she opens the next when she is
+         ready. Where a step offers two options the pick is hers, and
+         both the pick and how far she has got are kept in the browser
+         so closing the page does not lose her place.
+         ============================================================ */
+      const PROG_KEY = 'ellen-programme-v1';
+
+      function progState() {
+        try {
+          return JSON.parse(localStorage.getItem(PROG_KEY)) || { open: 1, picks: {} };
+        } catch (err) {
+          // private browsing, or storage turned off — the day still works,
+          // it just will not remember between visits
+          return { open: 1, picks: {} };
+        }
+      }
+
+      function saveProgState(state) {
+        try {
+          localStorage.setItem(PROG_KEY, JSON.stringify(state));
+        } catch (err) {
+          /* nothing to do: the page carries on with in-memory state */
+        }
+      }
+
+      function renderProgram(item) {
+        const steps = item.content || [];
+        const state = progState();
+        const opened = Math.min(Math.max(state.open || 1, 1), steps.length);
+
+        const rows = steps.map((step, i) => {
+          const n = i + 1;
+          const isOpen = n <= opened;
+          const isDone = n < opened;
+
+          if (!isOpen) {
+            return `<li class="locked" data-step="${n}">
+                <span class="step-title">${escapeHtml(step.title || '')}</span>
+                <span class="sealed">${escapeHtml(step.sealed || 'Not yet.')}</span>
+              </li>`;
+          }
+
+          let body = `<span class="step-title">${escapeHtml(step.title)}</span>
+             <span class="step-body">${escapeHtml(step.body || '')}`;
+          if (step.note) body += `<span class="step-note">${escapeHtml(step.note)}</span>`;
+          body += `</span>`;
+
+          // a step with two options waits for her to pick before it counts
+          // as done, so the day cannot run ahead of her
+          if (step.options) {
+            const picked = state.picks[n];
+            if (picked == null) {
+              body += `<div class="choices">` + step.options.map((o, k) =>
+                `<button class="choice" data-step="${n}" data-pick="${k}">${escapeHtml(o.label)}</button>`
+              ).join('') + `</div>`;
+            } else {
+              const chosen = step.options[picked];
+              body += `<div class="chosen">${escapeHtml(chosen.chosen || chosen.label)}` +
+                `<button class="redo" data-redo="${n}">change</button></div>`;
+              if (n === opened && n < steps.length) {
+                body += `<button class="step-go" data-next="${n + 1}">${escapeHtml(step.next || 'Next')}</button>`;
+              }
+            }
+          } else if (n === opened && n < steps.length) {
+            body += `<button class="step-go" data-next="${n + 1}">${escapeHtml(step.next || 'Next')}</button>`;
+          }
+
+          return `<li class="${isDone ? 'done' : ''}" data-step="${n}">${body}</li>`;
+        }).join('');
+
+        return `<div class="prog-intro">${escapeHtml(item.intro || '')}</div>
+           <div class="prog-progress">${opened} of ${steps.length}</div>
+           <ul class="prog">${rows}</ul>`;
+      }
+
+      // Clicks inside the programme: opening the next step, picking an
+      // option, or changing a pick. Delegated so it survives a re-render.
+      function wireProgram(person) {
+        const list = modalBody.querySelector('.prog');
+        if (!list) return;
+
+        list.addEventListener('click', e => {
+          const next = e.target.closest('[data-next]');
+          const pick = e.target.closest('[data-pick]');
+          const redo = e.target.closest('[data-redo]');
+          if (!next && !pick && !redo) return;
+
+          const state = progState();
+
+          if (next) {
+            state.open = Math.max(state.open || 1, parseInt(next.dataset.next, 10));
+          } else if (pick) {
+            state.picks[pick.dataset.step] = parseInt(pick.dataset.pick, 10);
+          } else if (redo) {
+            delete state.picks[redo.dataset.redo];
+          }
+
+          saveProgState(state);
+          openModal(person);
+        });
       }
 
       function escapeHtml(str) {
