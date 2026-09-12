@@ -12,16 +12,18 @@
     rel="stylesheet">
   <style>
     :root {
-      --night-1: #12162a;
-      --night-2: #1c2246;
-      --gold: #d9a857;
-      --gold-bright: #f0c887;
-      --rust: #b85c38;
-      --cream: #f3ecdd;
-      --cream-dim: #cfc6ae;
-      --teal: #3a6b63;
-      --locked: #4b4a68;
-      --locked-line: rgba(75, 74, 104, 0.55);
+      /* a plum night rather than a navy one: still dark enough for the
+         candles and the map to glow, but warm instead of cold */
+      --night-1: #1c1030;
+      --night-2: #33194a;
+      --gold: #e8a0bf;
+      --gold-bright: #f7c9dc;
+      --rust: #c4638a;
+      --cream: #fdeef4;
+      --cream-dim: #d8bdcb;
+      --teal: #7b5a91;
+      --locked: #5c4370;
+      --locked-line: rgba(92, 67, 112, 0.55);
     }
 
     * {
@@ -121,7 +123,7 @@
       font-size: 1rem;
       text-align: center;
       background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(217, 168, 87, 0.35);
+      border: 1px solid rgba(232, 160, 191, 0.35);
       border-radius: 8px;
       color: var(--cream);
       font-family: 'Jost', sans-serif;
@@ -382,7 +384,7 @@
 
     #modal {
       background: linear-gradient(180deg, #232951, #1a2044);
-      border: 1px solid rgba(217, 168, 87, 0.25);
+      border: 1px solid rgba(232, 160, 191, 0.25);
       border-radius: 14px;
       max-width: 560px;
       width: 100%;
@@ -528,7 +530,7 @@
     #modal .prog li {
       padding: 16px 0 16px 60px;
       position: relative;
-      border-top: 1px solid rgba(217, 168, 87, 0.18);
+      border-top: 1px solid rgba(232, 160, 191, 0.18);
     }
 
     #modal .prog .marker {
@@ -539,8 +541,8 @@
       height: 44px;
       border-radius: 50%;
       overflow: hidden;
-      border: 1px solid rgba(217, 168, 87, .45);
-      background: rgba(217, 168, 87, .07);
+      border: 1px solid rgba(232, 160, 191, .45);
+      background: rgba(232, 160, 191, .07);
       transition: border-color .3s ease, filter .3s ease, opacity .3s ease;
     }
 
@@ -555,8 +557,15 @@
 
     /* a sealed step keeps its picture dimmed and desaturated, so it reads
        as a hint rather than the thing itself */
+    /* a sealed row carries only its picture, so it collapses to the height
+       of the marker instead of leaving an empty block where text would be */
+    #modal .prog li.locked {
+      padding: 10px 0 10px 60px;
+      min-height: 64px;
+    }
+
     #modal .prog li.locked .marker {
-      border-color: rgba(217, 168, 87, .22);
+      border-color: rgba(232, 160, 191, .22);
     }
 
     #modal .prog li.locked .marker .step-pic {
@@ -607,8 +616,8 @@
       text-align: left;
       padding: 11px 13px;
       border-radius: 9px;
-      border: 1px solid rgba(217, 168, 87, .3);
-      background: rgba(217, 168, 87, .05);
+      border: 1px solid rgba(232, 160, 191, .3);
+      background: rgba(232, 160, 191, .05);
       color: var(--cream);
       font: inherit;
       font-size: .88rem;
@@ -618,12 +627,12 @@
     }
 
     #modal .prog .choice:hover {
-      background: rgba(217, 168, 87, .12);
+      background: rgba(232, 160, 191, .12);
       border-color: var(--gold);
     }
 
     #modal .prog .choice.picked {
-      background: rgba(217, 168, 87, .18);
+      background: rgba(232, 160, 191, .18);
       border-color: var(--gold);
       color: var(--gold-bright);
     }
@@ -651,7 +660,7 @@
       padding: 10px 18px;
       border-radius: 9px;
       border: 1px solid var(--gold);
-      background: rgba(217, 168, 87, .12);
+      background: rgba(232, 160, 191, .12);
       color: var(--gold-bright);
       font: inherit;
       font-size: .88rem;
@@ -660,7 +669,7 @@
     }
 
     #modal .prog .step-go:hover {
-      background: rgba(217, 168, 87, .22);
+      background: rgba(232, 160, 191, .22);
     }
 
     #modal .prog .sealed {
@@ -687,7 +696,7 @@
       counter-increment: gift;
       padding: 14px 0 14px 40px;
       position: relative;
-      border-top: 1px solid rgba(217, 168, 87, 0.18);
+      border-top: 1px solid rgba(232, 160, 191, 0.18);
     }
 
     #modal .gift-list li:before {
@@ -1425,12 +1434,10 @@
           const isDone = n < opened;
 
           if (!isOpen) {
-            // a sealed step shows its icon and a one-line tease, never the
-            // real title, so it reads as a promise rather than a contents page
+            // a sealed step is nothing but its picture, dimmed. No title, no
+            // teaser — the photograph is the whole hint.
             return `<li class="locked" data-step="${n}">
                 <span class="marker">${stepImage(step.icon)}</span>
-                <span class="step-title">${escapeHtml(step.teaser || '• • •')}</span>
-                <span class="sealed">${escapeHtml(step.sealed || 'Not yet.')}</span>
               </li>`;
           }
 
