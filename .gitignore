@@ -7,3 +7,7 @@ content.js
 .DS_Store
 Thumbs.db
 __pycache__/
+
+# Everyone's real photos, videos and messages. These are hosted on Drive and
+# linked from content.js — they must never be committed to a public repo.
+data/
