@@ -634,6 +634,26 @@
       color: var(--gold-bright);
     }
 
+    /* the payoff on a multi step: it appears only once she has ticked
+       something, so it reads as a reaction rather than a caption */
+    #modal .prog .reveal {
+      margin-top: 12px;
+      font-size: 1rem;
+      color: var(--gold-bright);
+      line-height: 1.5;
+    }
+
+    #modal .prog .reveal-media {
+      margin: 10px 0 0;
+    }
+
+    #modal .prog .reveal-media img {
+      max-height: 200px;
+      width: auto;
+      max-width: 100%;
+      border-radius: 9px;
+    }
+
     #modal .prog .chosen {
       margin-top: 8px;
       font-size: .88rem;
@@ -1404,11 +1424,12 @@
 
       function progState() {
         try {
-          return JSON.parse(localStorage.getItem(PROG_KEY)) || { open: 1, picks: {} };
+          const st = JSON.parse(localStorage.getItem(PROG_KEY)) || {};
+          return { open: st.open || 1, picks: st.picks || {}, multi: st.multi || {} };
         } catch (err) {
           // private browsing, or storage turned off — the day still works,
           // it just will not remember between visits
-          return { open: 1, picks: {} };
+          return { open: 1, picks: {}, multi: {} };
         }
       }
 
@@ -1447,7 +1468,29 @@
 
           // a step with two options waits for her to pick before it counts
           // as done, so the day cannot run ahead of her
-          if (step.options) {
+          // a multi step lets her tick as many as she likes; the reveal
+          // only appears once she has chosen at least one
+          if (step.multi) {
+            const set = state.multi[n] || [];
+            body += `<div class="choices multi">` + step.options.map((o, k) =>
+              `<button class="choice${set.indexOf(k) >= 0 ? ' picked' : ''}" ` +
+              `data-step="${n}" data-toggle="${k}">${escapeHtml(o.label)}</button>`
+            ).join('') + `</div>`;
+
+            if (set.length) {
+              if (step.reveal) {
+                body += `<div class="reveal">${escapeHtml(step.reveal)}</div>`;
+              }
+              if (step.revealMedia) {
+                body += `<figure class="media reveal-media">` +
+                  `<img src="${encodeURI(step.revealMedia)}" alt="" loading="lazy" />` +
+                  `</figure>`;
+              }
+              if (n === opened && n < steps.length) {
+                body += `<button class="step-go" data-next="${n + 1}">${escapeHtml(step.next || 'Next')}</button>`;
+              }
+            }
+          } else if (step.options) {
             const picked = state.picks[n];
             if (picked == null) {
               body += `<div class="choices">` + step.options.map((o, k) =>
@@ -1484,7 +1527,8 @@
           const next = e.target.closest('[data-next]');
           const pick = e.target.closest('[data-pick]');
           const redo = e.target.closest('[data-redo]');
-          if (!next && !pick && !redo) return;
+          const toggle = e.target.closest('[data-toggle]');
+          if (!next && !pick && !redo && !toggle) return;
 
           const state = progState();
 
@@ -1494,6 +1538,13 @@
             state.picks[pick.dataset.step] = parseInt(pick.dataset.pick, 10);
           } else if (redo) {
             delete state.picks[redo.dataset.redo];
+          } else if (toggle) {
+            const key = toggle.dataset.step;
+            const k = parseInt(toggle.dataset.toggle, 10);
+            const set = state.multi[key] || [];
+            const at = set.indexOf(k);
+            if (at >= 0) set.splice(at, 1); else set.push(k);
+            state.multi[key] = set;
           }
 
           saveProgState(state);
