@@ -654,6 +654,20 @@
       border-radius: 9px;
     }
 
+    #modal .prog .opt-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      margin-top: 8px;
+      font-size: .84rem;
+    }
+
+    #modal .prog .opt-links a {
+      color: var(--gold);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
     #modal .prog .chosen {
       margin-top: 8px;
       font-size: .88rem;
@@ -1492,6 +1506,13 @@
             }
           } else if (step.options) {
             const picked = state.picks[n];
+            const links = step.options.filter(o => o.url);
+            if (links.length) {
+              body += `<div class="opt-links">` + links.map(o =>
+                `<a href="${encodeURI(o.url)}" target="_blank" rel="noopener">` +
+                `${escapeHtml(o.label)} ↗</a>`
+              ).join('') + `</div>`;
+            }
             if (picked == null) {
               body += `<div class="choices">` + step.options.map((o, k) =>
                 `<button class="choice" data-step="${n}" data-pick="${k}">${escapeHtml(o.label)}</button>`
